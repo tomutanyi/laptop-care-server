@@ -6,6 +6,7 @@ class Item(db.Model):
     __tablename__ = 'items'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    second_name = db.Column(db.String(100), nullable=True)
     description = db.Column(db.String(200), nullable=True)
 
     def __repr__(self):

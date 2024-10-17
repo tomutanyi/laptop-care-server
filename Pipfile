@@ -10,6 +10,7 @@ flask-restful = "*"
 flask-sqlalchemy = "*"
 psycopg2-binary = "*"
 gunicorn = "*"
+flask-migrate = "*"
 
 [dev-packages]
 
