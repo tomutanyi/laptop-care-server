@@ -5,6 +5,15 @@ name = "pypi"
 
 [packages]
 faker = "*"
+flask = "*"
+flask-sqlalchemy = "*"
+flask-jwt-extended = "*"
+flask-restx = "*"
+flask-bcrypt = "*"
+psycopg2-binary = "*"
+sqlalchemy-serializer = "*"
+flask-migrate = "*"
+python-dotenv = "*"
 
 [dev-packages]
 
