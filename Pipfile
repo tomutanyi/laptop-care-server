@@ -5,6 +5,10 @@ name = "pypi"
 
 [packages]
 faker = "*"
+flask = "*"
+flask-restful = "*"
+flask-sqlalchemy = "*"
+psycopg2-binary = "*"
 
 [dev-packages]
 
