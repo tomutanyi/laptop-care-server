@@ -1,9 +1,10 @@
-from flask import request
 from flask_restx import Resource, Namespace, reqparse
 from . import db
-from .models import Client
+from .models import Client, Device
 
 client_ns = Namespace('clients', description='Client related operations')
+device_ns = Namespace('devices', description='Device related operations')
+
 
 client_parser = reqparse.RequestParser()
 client_parser.add_argument('name', type=str, required=True, help='Name of the client')
@@ -11,6 +12,23 @@ client_parser.add_argument('email', type=str, required=True, help='Email of the 
 client_parser.add_argument('phone_number', type=str, required=True, help='Phone number of the client')
 client_parser.add_argument('address', type=str, help='Address of the client')
 
+device_parser = reqparse.RequestParser()
+device_parser.add_argument('device_serial_number', type=str, required=True, help='Device serial number')
+device_parser.add_argument('device_model', type=str, required=True, help='Device model')
+device_parser.add_argument('brand', type=str, required=True, help='Brand of the device')
+device_parser.add_argument('hdd_or_ssd', type=str, help='Type of storage (HDD or SSD)')
+device_parser.add_argument('hdd_or_ssd_serial_number', type=str, help='HDD or SSD serial number')
+device_parser.add_argument('memory', type=str, help='Memory information')
+device_parser.add_argument('memory_serial_number', type=str, help='Memory serial number')
+device_parser.add_argument('battery', type=str, help='Battery information')
+device_parser.add_argument('battery_serial_number', type=str, help='Battery serial number')
+device_parser.add_argument('adapter', type=str, help='Adapter information')
+device_parser.add_argument('adapter_serial_number', type=str, help='Adapter serial number')
+device_parser.add_argument('client_id', type=int, required=True, help='Client ID associated with the device')
+device_parser.add_argument('warranty_status', type=bool, default=False, help='Warranty status of the device')
+
+
+# Client routes
 @client_ns.route('/')
 class ClientListResource(Resource):
     def get(self):
@@ -53,5 +71,70 @@ class ClientResource(Resource):
         """Delete a client by ID."""
         client = Client.query.get_or_404(client_id)
         db.session.delete(client)
+        db.session.commit()
+        return '', 204
+
+
+# Device routes
+@device_ns.route('/')
+class DeviceListResource(Resource):
+    def get(self):
+        """Retrieve a list of devices."""
+        devices = Device.query.all()
+        return [device.to_dict() for device in devices], 200
+
+    def post(self):
+        """Create a new device."""
+        data = device_parser.parse_args()
+        new_device = Device(
+            device_serial_number=data['device_serial_number'],
+            device_model=data['device_model'],
+            brand=data['brand'],
+            hdd_or_ssd=data.get('hdd_or_ssd'),
+            hdd_or_ssd_serial_number=data.get('hdd_or_ssd_serial_number'),
+            memory=data.get('memory'),
+            memory_serial_number=data.get('memory_serial_number'),
+            battery=data.get('battery'),
+            battery_serial_number=data.get('battery_serial_number'),
+            adapter=data.get('adapter'),
+            adapter_serial_number=data.get('adapter_serial_number'),
+            client_id=data['client_id'],
+            warranty_status=data.get('warranty_status', False)
+        )
+        db.session.add(new_device)
+        db.session.commit()
+        return new_device.to_dict(), 201
+
+@device_ns.route('/<int:device_id>')
+class DeviceResource(Resource):
+    def get(self, device_id):
+        """Retrieve a device by ID."""
+        device = Device.query.get_or_404(device_id)
+        return device.to_dict(), 200
+
+    def put(self, device_id):
+        """Update a device by ID."""
+        device = Device.query.get_or_404(device_id)
+        data = device_parser.parse_args()
+        device.device_serial_number = data['device_serial_number']
+        device.device_model = data['device_model']
+        device.brand = data['brand']
+        device.hdd_or_ssd = data.get('hdd_or_ssd')
+        device.hdd_or_ssd_serial_number = data.get('hdd_or_ssd_serial_number')
+        device.memory = data.get('memory')
+        device.memory_serial_number = data.get('memory_serial_number')
+        device.battery = data.get('battery')
+        device.battery_serial_number = data.get('battery_serial_number')
+        device.adapter = data.get('adapter')
+        device.adapter_serial_number = data.get('adapter_serial_number')
+        device.client_id = data['client_id']
+        device.warranty_status = data.get('warranty_status', False)
+        db.session.commit()
+        return device.to_dict(), 200
+
+    def delete(self, device_id):
+        """Delete a device by ID."""
+        device = Device.query.get_or_404(device_id)
+        db.session.delete(device)
         db.session.commit()
         return '', 204
