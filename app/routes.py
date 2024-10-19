@@ -1,9 +1,10 @@
 from flask_restx import Resource, Namespace, reqparse
 from . import db
-from .models import Client, Device
+from .models import Client, Device, Users
 
 client_ns = Namespace('clients', description='Client related operations')
 device_ns = Namespace('devices', description='Device related operations')
+users_ns = Namespace('users', description='Users related operations')
 
 
 client_parser = reqparse.RequestParser()
@@ -26,6 +27,12 @@ device_parser.add_argument('adapter', type=str, help='Adapter information')
 device_parser.add_argument('adapter_serial_number', type=str, help='Adapter serial number')
 device_parser.add_argument('client_id', type=int, required=True, help='Client ID associated with the device')
 device_parser.add_argument('warranty_status', type=bool, default=False, help='Warranty status of the device')
+
+users_parser = reqparse.RequestParser()
+users_parser.add_argument('username', type=str, required=True, help='Username for authentication')
+users_parser.add_argument('password', type=str, required=True, help='Password for authentication')
+users_parser.add_argument('email', type=str, required=True, help='Email of the User')
+users_parser.add_argument('role', type=str, required=True, help='Role of the User (admin or user)')
 
 
 # Client routes
@@ -138,3 +145,45 @@ class DeviceResource(Resource):
         db.session.delete(device)
         db.session.commit()
         return '', 204
+    
+# Users routes
+@users_ns.route('/')
+class UserListResource(Resource):
+    def get(self):
+        """Retrieve a list of users."""
+        users = Users.query.all()
+        return [user.to_dict(rules=('-password',)) for user in users], 200
+
+    def post(self):
+        """Create a new user."""
+        data = users_parser.parse_args()
+        
+        # Create a new user instance
+        new_user = Users(
+            username=data['username'],
+            email=data['email'],
+            role=data['role']
+        )
+        
+        # Hash and set the password
+        new_user.set_password(data['password'])
+        
+        # Add the user to the session and commit
+        db.session.add(new_user)
+        db.session.commit()
+        
+        return new_user.to_dict(rules=('-password',)), 201
+
+@users_ns.route('/<int:user_id>')
+class UserResource(Resource):
+    def get(self, user_id):
+        """Retrieve a user by ID."""
+        user = Users.query.get_or_404(user_id)
+        return user.to_dict(rules=('-password',)), 200
+
+    def delete(self, user_id):
+        """Delete a user by ID."""
+        user = Users.query.get_or_404(user_id)
+        db.session.delete(user)
+        db.session.commit()
+        return 'Deleted User', 204

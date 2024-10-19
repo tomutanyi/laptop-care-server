@@ -22,9 +22,10 @@ def create_app():
     api.init_app(app)
     migrate.init_app(app, db)
 
-    from .routes import client_ns, device_ns
+    from .routes import client_ns, device_ns, users_ns
     api.add_namespace(client_ns)
     api.add_namespace(device_ns)
+    api.add_namespace(users_ns)
     return app
 
 app = create_app()

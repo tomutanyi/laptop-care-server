@@ -1,8 +1,10 @@
 from flask_sqlalchemy import SQLAlchemy
+from flask_bcrypt import Bcrypt
 from sqlalchemy_serializer import SerializerMixin
 import re
 
 db = SQLAlchemy()
+bcrypt = Bcrypt()
 
 class Client(db.Model, SerializerMixin):
     __tablename__ = 'clients'
@@ -75,3 +77,33 @@ class Device(db.Model, SerializerMixin):
 
     def __str__(self):
         return f'{self.device_model} - {self.brand}'
+    
+    
+class Users(db.Model, SerializerMixin):
+    __tablename__ = 'users'
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(50), nullable=False, unique=True)
+    username = db.Column(db.String(50), nullable=False)
+    password = db.Column(db.String(255), nullable=True)
+    role = db.Column(db.String(50), nullable=False)
+
+    # This hides the password from the db
+    # @property
+    # def password(self):
+    #     raise AttributeError("Password is not a readable attribute.")
+
+    def set_password(self, password):
+        """Hashes the password and stores it."""
+        self.password = bcrypt.generate_password_hash(password).decode('utf-8')
+
+    def check_password(self, password):
+        """Checks a password against the stored hash."""
+        return bcrypt.check_password_hash(self.password, password)
+
+    def __repr__(self):
+        return f'<User {self.username}>'
+
+    def __str__(self):
+        return f'{self.username} - {self.role}'
+    
