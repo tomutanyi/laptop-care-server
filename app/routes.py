@@ -1,6 +1,9 @@
 from flask_restx import Resource, Namespace, reqparse
+from flask_jwt_extended import create_access_token
 from . import db
 from .models import Client, Device, Users
+from datetime import timedelta
+
 
 client_ns = Namespace('clients', description='Client related operations')
 device_ns = Namespace('devices', description='Device related operations')
@@ -33,6 +36,11 @@ users_parser.add_argument('username', type=str, required=True, help='Username fo
 users_parser.add_argument('password', type=str, required=True, help='Password for authentication')
 users_parser.add_argument('email', type=str, required=True, help='Email of the User')
 users_parser.add_argument('role', type=str, required=True, help='Role of the User (admin or user)')
+
+
+login_parser = reqparse.RequestParser()
+login_parser.add_argument('username', type=str, required=True, help='Username for login')
+login_parser.add_argument('password', type=str, required=True, help='Password for login')
 
 
 # Client routes
@@ -187,3 +195,22 @@ class UserResource(Resource):
         db.session.delete(user)
         db.session.commit()
         return 'Deleted User', 204
+    
+
+@users_ns.route('/login')
+class UserLoginResource(Resource):
+    def post(self):
+        """Authenticate user and return a JWT."""
+        data = login_parser.parse_args()
+        user = Users.query.filter_by(username=data['username']).first()
+
+        if not user or not user.check_password(data['password']):
+            return {'message': 'Invalid username or password'}, 401
+        
+        # Generate a JWT access token
+        access_token = create_access_token(identity=user.id, expires_delta=timedelta(hours=1))
+
+        return {
+            'access_token': access_token,
+            'message': 'Login successful'
+        }, 200
