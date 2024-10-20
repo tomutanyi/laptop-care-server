@@ -22,7 +22,7 @@ def create_app():
     api.init_app(app)
     migrate.init_app(app, db)
 
-    CORS(app, resources={r"/*": {"origins": "*"}})  # Apply CORS to the app
+    CORS(app)  # Apply CORS to the app
 
     from .routes import client_ns, device_ns, users_ns
     api.add_namespace(client_ns)
