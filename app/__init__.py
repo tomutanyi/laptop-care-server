@@ -13,7 +13,7 @@ bcrypt = Bcrypt()
 api = Api()
 migrate = Migrate()
 
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(api, resources={r"/*": {"origins": "*"}})
 
 def create_app():
     app = Flask(__name__)
