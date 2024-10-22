@@ -213,5 +213,9 @@ class UserLoginResource(Resource):
 
         return {
             'access_token': access_token,
+            'username': user.username,
+            'id': user.id,
+            'role': user.role, 
             'message': 'Login successful'
         }, 200
+
