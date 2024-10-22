@@ -44,7 +44,7 @@ login_parser.add_argument('password', type=str, required=True, help='Password fo
 
 
 # Client routes
-@client_ns.route('/')
+@client_ns.route('', endpoint='clients')
 class ClientListResource(Resource):
     def get(self):
         """Retrieve a list of clients."""
@@ -64,7 +64,7 @@ class ClientListResource(Resource):
         db.session.commit()
         return new_client.to_dict(), 201
 
-@client_ns.route('/<int:client_id>')
+@client_ns.route('/<int:client_id>', endpoint='clients/<int:client_id>')
 class ClientResource(Resource):
     def get(self, client_id):
         """Retrieve a client by ID."""
@@ -91,7 +91,7 @@ class ClientResource(Resource):
 
 
 # Device routes
-@device_ns.route('/')
+@device_ns.route('', endpoint='devices')
 class DeviceListResource(Resource):
     def get(self):
         """Retrieve a list of devices."""
@@ -120,7 +120,7 @@ class DeviceListResource(Resource):
         db.session.commit()
         return new_device.to_dict(), 201
 
-@device_ns.route('/<int:device_id>')
+@device_ns.route('/<int:device_id>', endpoint='devices/<int:device_id>')
 class DeviceResource(Resource):
     def get(self, device_id):
         """Retrieve a device by ID."""
@@ -154,8 +154,9 @@ class DeviceResource(Resource):
         db.session.commit()
         return '', 204
     
+
 # Users routes
-@users_ns.route('/')
+@users_ns.route('', endpoint='users')
 class UserListResource(Resource):
     def get(self):
         """Retrieve a list of users."""
@@ -182,7 +183,7 @@ class UserListResource(Resource):
         
         return new_user.to_dict(rules=('-password',)), 201
 
-@users_ns.route('/<int:user_id>')
+@users_ns.route('/<int:user_id>', endpoint='users/<int:user_id>')
 class UserResource(Resource):
     def get(self, user_id):
         """Retrieve a user by ID."""
@@ -197,7 +198,7 @@ class UserResource(Resource):
         return 'Deleted User', 204
     
 
-@users_ns.route('/login')
+@users_ns.route('/login', endpoint='user_login')
 class UserLoginResource(Resource):
     def post(self):
         """Authenticate user and return a JWT."""
