@@ -198,7 +198,7 @@ class UserResource(Resource):
         return 'Deleted User', 204
     
 
-@users_ns.route('/login', endpoint='user_login')
+@users_ns.route('/login', endpoint='login')
 class UserLoginResource(Resource):
     def post(self):
         """Authenticate user and return a JWT."""
@@ -213,5 +213,9 @@ class UserLoginResource(Resource):
 
         return {
             'access_token': access_token,
+            'username': user.username,
+            'id': user.id,
+            'role': user.role, 
             'message': 'Login successful'
         }, 200
+
