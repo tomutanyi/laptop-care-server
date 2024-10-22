@@ -15,6 +15,7 @@ sqlalchemy-serializer = "*"
 flask-migrate = "*"
 python-dotenv = "*"
 gunicorn = "*"
+flask-cors = "*"
 
 [dev-packages]
 

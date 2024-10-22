@@ -1,12 +1,11 @@
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
 from flask_bcrypt import Bcrypt
 from flask_restx import Api
+from flask_cors import CORS
 from .config import Config
 from .models import Client, db
-
 
 jwt = JWTManager()
 bcrypt = Bcrypt()
@@ -23,6 +22,14 @@ def create_app():
     api.init_app(app)
     migrate.init_app(app, db)
 
-    from .routes import client_ns
+    # Apply CORS to the app
+    CORS(app, origins=["http://localhost:3000", "https://laptop-care-client.vercel.app"], supports_credentials=True)
+
+    from .routes import client_ns, device_ns, users_ns
     api.add_namespace(client_ns)
+    api.add_namespace(device_ns)
+    api.add_namespace(users_ns)
+
     return app
+
+app = create_app()
