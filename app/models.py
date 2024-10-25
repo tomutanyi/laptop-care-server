@@ -1,8 +1,14 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from sqlalchemy_serializer import SerializerMixin
-from sqlalchemy import func
+from sqlalchemy import func, DateTime
+from datetime import datetime
+import pytz
 import re
+
+utc_now = datetime.now(pytz.utc)
+nairobi_tz = pytz.timezone('Africa/Nairobi')
+nairobi_now = utc_now.astimezone(nairobi_tz)
 
 db = SQLAlchemy()
 bcrypt = Bcrypt()
@@ -115,8 +121,13 @@ class Jobcards(db.Model, SerializerMixin):
     problem_description = db.Column(db.String(100), nullable=False)
     status = db.Column(db.String(50), nullable=False)
     device_id = db.Column(db.Integer, db.ForeignKey('devices.id'), nullable=False)
-    timestamp = db.Column(db.DateTime, server_default=func.now(), nullable=False)  # Add the timestamp column
+    timestamp = db.Column(DateTime, default=lambda: datetime.now(pytz.timezone('Africa/Nairobi')))  # Add the timestamp column
     
+
+    @property
+    def local_timestamp(self):
+        """Returns the timestamp in the Nairobi timezone."""
+        return self.timestamp.astimezone(pytz.timezone('Africa/Nairobi'))
     def __str__(self):
         return f"Jobcard(id={self.id}, problem='{self.problem_description}', status='{self.status}', timestamp='{self.timestamp}')"
 
