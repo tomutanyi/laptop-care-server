@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from sqlalchemy_serializer import SerializerMixin
+from sqlalchemy import func
 import re
 
 db = SQLAlchemy()
@@ -114,6 +115,14 @@ class Jobcards(db.Model, SerializerMixin):
     problem_description = db.Column(db.String(100), nullable=False)
     status = db.Column(db.String(50), nullable=False)
     device_id = db.Column(db.Integer, db.ForeignKey('devices.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, server_default=func.now(), nullable=False)  # Add the timestamp column
+    
+    def __str__(self):
+        return f"Jobcard(id={self.id}, problem='{self.problem_description}', status='{self.status}', timestamp='{self.timestamp}')"
+
+    def __repr__(self):
+        return f"<Jobcard(id={self.id}, problem='{self.problem_description}', status='{self.status}', timestamp='{self.timestamp}')>"
+
 
 
 
