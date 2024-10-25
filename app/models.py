@@ -70,7 +70,7 @@ class Device(db.Model, SerializerMixin):
     adapter = db.Column(db.String(50), nullable=True) 
     adapter_serial_number = db.Column(db.String(50), nullable=True) 
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False)
-    warranty_status = db.Column(db.Boolean, default=False)
+    warranty_status = db.Column(db.String(100), nullable=False) 
 
     def __repr__(self):
         return f'<Device {self.brand}>'
