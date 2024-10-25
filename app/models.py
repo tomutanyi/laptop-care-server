@@ -106,4 +106,15 @@ class Users(db.Model, SerializerMixin):
 
     def __str__(self):
         return f'{self.username} - {self.role}'
+
+class Jobcards(db.Model, SerializerMixin):
+    __tablename__ = 'jobcards'
+    serialize_rules = ('-device.jobcards',)
+    id = db.Column(db.Integer, primary_key=True)
+    problem_description = db.Column(db.String(100), nullable=False)
+    status = db.Column(db.String(50), nullable=False)
+    device_id = db.Column(db.Integer, db.ForeignKey('devices.id'), nullable=False)
+
+
+
     
