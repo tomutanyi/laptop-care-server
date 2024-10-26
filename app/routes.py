@@ -230,10 +230,21 @@ class UserLoginResource(Resource):
 @jobcards_ns.route('', endpoint='jobcards')
 class JobcardsResource(Resource):
     def get(self):
-        """Retrieve a list of jobcards."""
-        jobcards = Jobcards.query.all()
+        """Retrieve a list of jobcards with an optional status filter."""
+        # Parse the optional status argument
+        parser = reqparse.RequestParser()
+        parser.add_argument('status', type=str, help='Status of the jobcard')
+        args = parser.parse_args()
+
+        # Apply filter if status argument is provided
+        if args['status']:
+            jobcards = Jobcards.query.filter_by(status=args['status']).all()
+        else:
+            jobcards = Jobcards.query.all()  # Retrieve all job cards if no status filter is provided
+
+        # Serialize and return the filtered job cards
         return [jobcard.to_dict() for jobcard in jobcards], 200
-    
+     
     def post(self):
         """Create a new jobcard."""
         data = jobcards_parser.parse_args()
@@ -245,3 +256,15 @@ class JobcardsResource(Resource):
         db.session.add(new_jobcard)
         db.session.commit()
         return new_jobcard.to_dict(), 201
+
+@jobcards_ns.route('/<int:jobcard_id>/details', endpoint='jobcard_details')
+class JobcardDetailsResource(Resource):
+    def get(self, jobcard_id):
+        """Retrieve client and device details for a specific jobcard."""
+        jobcard = Jobcards.query.get_or_404(jobcard_id)
+        details = jobcard.get_client_device_info()
+        
+        if details:
+            return details, 200
+        else:
+            return {"message": "Details not found for the specified jobcard."}, 404
