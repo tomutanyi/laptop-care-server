@@ -25,10 +25,11 @@ def create_app():
     # Apply CORS to the app
     CORS(app, origins=["http://localhost:3000", "https://laptop-care-client.vercel.app"], supports_credentials=True)
 
-    from .routes import client_ns, device_ns, users_ns
+    from .routes import client_ns, device_ns, users_ns,jobcards_ns
     api.add_namespace(client_ns)
     api.add_namespace(device_ns)
     api.add_namespace(users_ns)
+    api.add_namespace(jobcards_ns)
 
     return app
 

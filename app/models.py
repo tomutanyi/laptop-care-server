@@ -1,7 +1,14 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from sqlalchemy_serializer import SerializerMixin
+from sqlalchemy import func, DateTime
+from datetime import datetime
+import pytz
 import re
+
+utc_now = datetime.now(pytz.utc)
+nairobi_tz = pytz.timezone('Africa/Nairobi')
+nairobi_now = utc_now.astimezone(nairobi_tz)
 
 db = SQLAlchemy()
 bcrypt = Bcrypt()
@@ -25,6 +32,11 @@ class Client(db.Model, SerializerMixin):
         self.address = address
         
         self.validate_fields()
+
+    def get_jobcards(self):
+        """Retrieve all job cards associated with this client."""
+        return Jobcards.query.join(Device).filter(Device.client_id == self.id).all()
+
 
     def validate_fields(self):
         """Validate the client's fields."""
@@ -70,7 +82,7 @@ class Device(db.Model, SerializerMixin):
     adapter = db.Column(db.String(50), nullable=True) 
     adapter_serial_number = db.Column(db.String(50), nullable=True) 
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False)
-    warranty_status = db.Column(db.Boolean, default=False)
+    warranty_status = db.Column(db.String(100), nullable=False) 
 
     def __repr__(self):
         return f'<Device {self.brand}>'
@@ -106,4 +118,57 @@ class Users(db.Model, SerializerMixin):
 
     def __str__(self):
         return f'{self.username} - {self.role}'
+
+class Jobcards(db.Model, SerializerMixin):
+    __tablename__ = 'jobcards'
+    serialize_rules = ('-device.jobcards',)
+    id = db.Column(db.Integer, primary_key=True)
+    problem_description = db.Column(db.String(100), nullable=False)
+    status = db.Column(db.String(50), nullable=False)
+    device_id = db.Column(db.Integer, db.ForeignKey('devices.id'), nullable=False)
+    timestamp = db.Column(DateTime, default=lambda: datetime.now(pytz.timezone('Africa/Nairobi')))  # Add the timestamp column
+    
+    def get_client_device_info(self):
+        """Retrieve client name, client email, device model, and device brand for this jobcard."""
+    
+        client_info = (
+            db.session.query(
+                Client.name.label('client_name'),
+                Client.email.label('client_email'),
+                Device.device_model.label('device_model'),
+                Device.brand.label('device_brand')
+            )
+            .select_from(Jobcards) 
+            .join(Device, Jobcards.device_id == Device.id)
+            .join(Client, Device.client_id == Client.id) 
+            .filter(Jobcards.id == self.id)    
+            .first()
+        )
+
+        if client_info:
+            return {
+                "client_name": client_info.client_name,
+                "client_email": client_info.client_email,
+                "device_model": client_info.device_model,
+                "device_brand": client_info.device_brand
+            }
+        
+
+        return None
+    
+
+    @property
+    def local_timestamp(self):
+        """Returns the timestamp in the Nairobi timezone."""
+        return self.timestamp.astimezone(pytz.timezone('Africa/Nairobi'))
+    
+    def __str__(self):
+        return f"Jobcard(id={self.id}, problem='{self.problem_description}', status='{self.status}', timestamp='{self.timestamp}')"
+
+    def __repr__(self):
+        return f"<Jobcard(id={self.id}, problem='{self.problem_description}', status='{self.status}', timestamp='{self.timestamp}')>"
+
+
+
+
     

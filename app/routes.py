@@ -1,13 +1,14 @@
 from flask_restx import Resource, Namespace, reqparse
 from flask_jwt_extended import create_access_token
 from . import db
-from .models import Client, Device, Users
+from .models import Client, Device, Users, Jobcards
 from datetime import timedelta
 
 
 client_ns = Namespace('clients', description='Client related operations')
 device_ns = Namespace('devices', description='Device related operations')
 users_ns = Namespace('users', description='Users related operations')
+jobcards_ns = Namespace('jobcards', description='Jobcards related operations')
 
 
 client_parser = reqparse.RequestParser()
@@ -41,6 +42,12 @@ users_parser.add_argument('role', type=str, required=True, help='Role of the Use
 login_parser = reqparse.RequestParser()
 login_parser.add_argument('username', type=str, required=True, help='Username for login')
 login_parser.add_argument('password', type=str, required=True, help='Password for login')
+
+jobcards_parser = reqparse.RequestParser()
+jobcards_parser.add_argument('device_id', type=int, required=True, help='Device ID associated with the jobcard')
+jobcards_parser.add_argument('problem_description', type=str, required=True, help='Job description for the jobcard')
+jobcards_parser.add_argument('status', type=str, required=True, help='Status of the jobcard')
+
 
 
 # Client routes
@@ -218,4 +225,46 @@ class UserLoginResource(Resource):
             'role': user.role, 
             'message': 'Login successful'
         }, 200
+    
 
+@jobcards_ns.route('', endpoint='jobcards')
+class JobcardsResource(Resource):
+    def get(self):
+        """Retrieve a list of jobcards with an optional status filter."""
+        # Parse the optional status argument
+        parser = reqparse.RequestParser()
+        parser.add_argument('status', type=str, help='Status of the jobcard')
+        args = parser.parse_args()
+
+        # Apply filter if status argument is provided
+        if args['status']:
+            jobcards = Jobcards.query.filter_by(status=args['status']).all()
+        else:
+            jobcards = Jobcards.query.all()  # Retrieve all job cards if no status filter is provided
+
+        # Serialize and return the filtered job cards
+        return [jobcard.to_dict() for jobcard in jobcards], 200
+     
+    def post(self):
+        """Create a new jobcard."""
+        data = jobcards_parser.parse_args()
+        new_jobcard = Jobcards(
+            problem_description=data['problem_description'],
+            status=data['status'],
+            device_id=data['device_id']
+        )
+        db.session.add(new_jobcard)
+        db.session.commit()
+        return new_jobcard.to_dict(), 201
+
+@jobcards_ns.route('/<int:jobcard_id>/details', endpoint='jobcard_details')
+class JobcardDetailsResource(Resource):
+    def get(self, jobcard_id):
+        """Retrieve client and device details for a specific jobcard."""
+        jobcard = Jobcards.query.get_or_404(jobcard_id)
+        details = jobcard.get_client_device_info()
+        
+        if details:
+            return details, 200
+        else:
+            return {"message": "Details not found for the specified jobcard."}, 404
