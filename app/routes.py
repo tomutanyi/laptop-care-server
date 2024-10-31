@@ -95,6 +95,23 @@ class ClientResource(Resource):
         db.session.delete(client)
         db.session.commit()
         return '', 204
+    
+@client_ns.route('/search', endpoint='clients_search')
+class ClientSearchResource(Resource):
+    def get(self):
+        """Search for a client by phone number."""
+        parser = reqparse.RequestParser()
+        parser.add_argument('phone_number', type=str, required=True, help="Phone number to search for")
+        args = parser.parse_args()
+
+        # Query the database for clients with the given phone number
+        client = Client.query.filter_by(phone_number=args['phone_number']).first()
+        
+        if client:
+            return client.to_dict(), 200
+        else:
+            return {'message': 'Client not found'}, 404
+
 
 
 # Device routes
