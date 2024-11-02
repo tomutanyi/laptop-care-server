@@ -126,6 +126,7 @@ class Jobcards(db.Model, SerializerMixin):
     problem_description = db.Column(db.String(100), nullable=False)
     status = db.Column(db.String(50), nullable=False)
     device_id = db.Column(db.Integer, db.ForeignKey('devices.id'), nullable=False)
+    diagnostic = db.Column(db.String(50), nullable=True)
     timestamp = db.Column(DateTime, default=lambda: datetime.now(pytz.timezone('Africa/Nairobi')))  # Add the timestamp column
     
     def get_client_device_info(self):

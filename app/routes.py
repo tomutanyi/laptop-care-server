@@ -178,6 +178,24 @@ class DeviceResource(Resource):
         db.session.commit()
         return '', 204
     
+@device_ns.route('/search', endpoint='devices_search')
+class DeviceSearchResource(Resource):
+    def get(self):
+        """Search for a device by serial number."""
+        parser = reqparse.RequestParser()
+        parser.add_argument('device_serial_number', type=str, required=True, help='Device serial number to search for')
+        args = parser.parse_args()
+
+        # Query the database for the device with the given serial number
+        device = Device.query.filter_by(device_serial_number=args['device_serial_number']).first()
+        
+        if device:
+            return device.to_dict(), 200
+        else:
+            return {'message': 'Device not found'}, 404
+    
+
+    
 
 # Users routes
 @users_ns.route('', endpoint='users')
