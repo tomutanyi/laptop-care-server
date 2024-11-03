@@ -47,6 +47,7 @@ jobcards_parser = reqparse.RequestParser()
 jobcards_parser.add_argument('device_id', type=int, required=True, help='Device ID associated with the jobcard')
 jobcards_parser.add_argument('problem_description', type=str, required=True, help='Job description for the jobcard')
 jobcards_parser.add_argument('status', type=str, required=True, help='Status of the jobcard')
+jobcards_parser.add_argument('assigned_technician_id', type=int, required=False, help='Technician ID for assignment')
 
 
 
@@ -286,6 +287,10 @@ class JobcardsResource(Resource):
     def post(self):
         """Create a new jobcard."""
         data = jobcards_parser.parse_args()
+
+        print("Data received from front end for posting:", data)
+        print("Assigned technician ID:", data.get('assigned_technician_id'))  # Log assigned_technician_id specifically
+
         new_jobcard = Jobcards(
             problem_description=data['problem_description'],
             status=data['status'],
