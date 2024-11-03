@@ -94,11 +94,15 @@ class Device(db.Model, SerializerMixin):
 class Users(db.Model, SerializerMixin):
     __tablename__ = 'users'
 
+    serialize_rules =  ('-jobcards.user',) 
+
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(50), nullable=False, unique=True)
     username = db.Column(db.String(50), nullable=False)
     password = db.Column(db.String(255), nullable=True)
     role = db.Column(db.String(50), nullable=False)
+
+    jobcards = db.relationship('Jobcards', backref='user', lazy=True, cascade="all, delete-orphan")
 
     # This hides the password from the db
     # @property
@@ -128,6 +132,7 @@ class Jobcards(db.Model, SerializerMixin):
     device_id = db.Column(db.Integer, db.ForeignKey('devices.id'), nullable=False)
     diagnostic = db.Column(db.String(50), nullable=True)
     timestamp = db.Column(DateTime, default=lambda: datetime.now(pytz.timezone('Africa/Nairobi')))  # Add the timestamp column
+    assigned_technician_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     
     def get_client_device_info(self):
         """Retrieve client name, client email, device model, and device brand for this jobcard."""
