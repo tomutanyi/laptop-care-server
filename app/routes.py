@@ -193,9 +193,6 @@ class DeviceSearchResource(Resource):
             return device.to_dict(), 200
         else:
             return {'message': 'Device not found'}, 404
-    
-
-    
 
 # Users routes
 @users_ns.route('', endpoint='users')
@@ -239,6 +236,13 @@ class UserResource(Resource):
         db.session.commit()
         return 'Deleted User', 204
     
+@users_ns.route('/technicians', endpoint='technicians') #Endpoint to fetch all technicians
+class TechnicianListResource(Resource):
+    def get(self):
+        """Retrieve a list of users with the role of technician."""
+        technicians = Users.query.filter_by(role='technician').all()
+        return [technician.to_dict(rules=('-password',)) for technician in technicians], 200
+    
 
 @users_ns.route('/login', endpoint='login')
 class UserLoginResource(Resource):
@@ -259,8 +263,7 @@ class UserLoginResource(Resource):
             'id': user.id,
             'role': user.role, 
             'message': 'Login successful'
-        }, 200
-    
+        }, 200    
 
 @jobcards_ns.route('', endpoint='jobcards')
 class JobcardsResource(Resource):
@@ -286,7 +289,8 @@ class JobcardsResource(Resource):
         new_jobcard = Jobcards(
             problem_description=data['problem_description'],
             status=data['status'],
-            device_id=data['device_id']
+            device_id=data['device_id'],
+            assigned_technician_id=data.get('assigned_technician_id'),
         )
         db.session.add(new_jobcard)
         db.session.commit()
