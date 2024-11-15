@@ -269,20 +269,40 @@ class UserLoginResource(Resource):
 @jobcards_ns.route('', endpoint='jobcards')
 class JobcardsResource(Resource):
     def get(self):
-        """Retrieve a list of jobcards with an optional status filter."""
-        # Parse the optional status argument
+        """Retrieve a list of jobcards with optional status and assigned technician ID filters."""
+        # Parse the optional status and assigned technician ID arguments
         parser = reqparse.RequestParser()
         parser.add_argument('status', type=str, help='Status of the jobcard')
+        parser.add_argument('assigned_technician_id', type=int, help='Technician ID assigned to the jobcard')
         args = parser.parse_args()
 
-        # Apply filter if status argument is provided
+        # Build the query with optional filters
+        query = Jobcards.query
+        
         if args['status']:
-            jobcards = Jobcards.query.filter_by(status=args['status']).all()
-        else:
-            jobcards = Jobcards.query.all()  # Retrieve all job cards if no status filter is provided
+            query = query.filter_by(status=args['status'])
+        
+        if args['assigned_technician_id']:
+            query = query.filter_by(assigned_technician_id=args['assigned_technician_id'])
 
-        # Serialize and return the filtered job cards
-        return [jobcard.to_dict() for jobcard in jobcards], 200
+        # Retrieve filtered job cards
+        jobcards = query.all()
+
+        # Get additional client and device details for each job card
+        jobcards_with_details = []
+        for jobcard in jobcards:
+            jobcard_details = jobcard.to_dict()  # Assuming you have a `to_dict` method on Jobcards
+            client_device_info = jobcard.get_client_device_info()  # Get client and device info
+
+            if client_device_info:
+                jobcard_details.update(client_device_info)  # Add client and device info to the jobcard details
+
+            jobcards_with_details.append(jobcard_details)
+
+        # Serialize and return the filtered job cards with client and device details
+        return jobcards_with_details, 200
+
+
      
     def post(self):
         """Create a new jobcard."""
@@ -312,3 +332,22 @@ class JobcardDetailsResource(Resource):
             return details, 200
         else:
             return {"message": "Details not found for the specified jobcard."}, 404
+        
+@jobcards_ns.route('/<int:jobcard_id>/status', endpoint='update_jobcard_status')
+class JobcardStatusUpdateResource(Resource):
+    def patch(self, jobcard_id):
+        """Update the status of a jobcard."""
+        parser = reqparse.RequestParser()
+        parser.add_argument('status', type=str, required=True, help='New status for the jobcard')
+        args = parser.parse_args()
+
+        # Find the jobcard by ID
+        jobcard = Jobcards.query.get_or_404(jobcard_id)
+
+        # Update the status field
+        jobcard.status = args['status']
+        db.session.commit()
+
+        return {'message': 'Jobcard status updated successfully', 'jobcard': jobcard.to_dict()}, 200
+    
+
