@@ -288,8 +288,20 @@ class JobcardsResource(Resource):
         # Retrieve filtered job cards
         jobcards = query.all()
 
-        # Serialize and return the filtered job cards
-        return [jobcard.to_dict() for jobcard in jobcards], 200
+        # Get additional client and device details for each job card
+        jobcards_with_details = []
+        for jobcard in jobcards:
+            jobcard_details = jobcard.to_dict()  # Assuming you have a `to_dict` method on Jobcards
+            client_device_info = jobcard.get_client_device_info()  # Get client and device info
+
+            if client_device_info:
+                jobcard_details.update(client_device_info)  # Add client and device info to the jobcard details
+
+            jobcards_with_details.append(jobcard_details)
+
+        # Serialize and return the filtered job cards with client and device details
+        return jobcards_with_details, 200
+
 
      
     def post(self):
