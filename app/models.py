@@ -175,6 +175,11 @@ class Jobcards(db.Model, SerializerMixin):
         return f"<Jobcard(id={self.id}, problem='{self.problem_description}', status='{self.status}', timestamp='{self.timestamp}')>"
 
 
-
-
+      # Method to track status changes
+    def on_status_change(self, new_status):
+        if self.status != new_status:
+            self.status = new_status
+            db.session.commit()
+            return True
+        return False
     

@@ -1,7 +1,9 @@
+from flask import current_app
 from flask_restx import Resource, Namespace, reqparse
 from flask_jwt_extended import create_access_token
 from . import db
 from .models import Client, Device, Users, Jobcards
+from app.utils import send_email
 from datetime import timedelta
 
 
@@ -312,3 +314,34 @@ class JobcardDetailsResource(Resource):
             return details, 200
         else:
             return {"message": "Details not found for the specified jobcard."}, 404
+        
+@jobcards_ns.route('/<int:jobcard_id>', endpoint='jobcard_update')
+class JobcardUpdateResource(Resource):
+    def put(self, jobcard_id):
+        """Update a jobcard status and send a notification if the status changes."""
+        jobcard = Jobcards.query.get_or_404(jobcard_id)
+        data = jobcards_parser.parse_args()
+
+        # Check if the status has changed
+        new_status = data.get('status')
+        if jobcard.status != new_status:
+            previous_status = jobcard.status
+            jobcard.status = new_status
+            db.session.commit()
+
+            # Get technician email if assigned
+            technician = Users.query.get(jobcard.assigned_technician_id)
+            technician_email = technician.email if technician else None
+
+            # Send notification email
+            if technician_email:
+                subject = f"Job Card #{jobcard_id} Status Update"
+                body = (f"Hello {technician.username},\n\n"
+                        f"The status of job card #{jobcard_id} has changed from '{previous_status}' to '{new_status}'.\n\n"
+                        "Please check the system for more details.")
+                
+                send_email(subject, [technician_email], body)
+
+            return jobcard.to_dict(), 200
+        
+        return {'message': 'No status change detected.'}, 200
