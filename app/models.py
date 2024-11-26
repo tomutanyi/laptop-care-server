@@ -132,6 +132,7 @@ class Jobcards(db.Model, SerializerMixin):
     device_id = db.Column(db.Integer, db.ForeignKey('devices.id'), nullable=False)
     diagnostic = db.Column(db.String(50), nullable=True)
     timestamp = db.Column(DateTime, default=lambda: datetime.now(pytz.timezone('Africa/Nairobi')))  # Add the timestamp column
+    cost = db.Column(db.Integer, nullable=True)
     assigned_technician_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     
     def get_client_device_info(self):
@@ -142,7 +143,9 @@ class Jobcards(db.Model, SerializerMixin):
                 Client.name.label('client_name'),
                 Client.email.label('client_email'),
                 Device.device_model.label('device_model'),
-                Device.brand.label('device_brand')
+                Device.brand.label('device_brand'),
+                Jobcards.status.label('jobcards_status')
+
             )
             .select_from(Jobcards) 
             .join(Device, Jobcards.device_id == Device.id)
@@ -156,7 +159,8 @@ class Jobcards(db.Model, SerializerMixin):
                 "client_name": client_info.client_name,
                 "client_email": client_info.client_email,
                 "device_model": client_info.device_model,
-                "device_brand": client_info.device_brand
+                "device_brand": client_info.device_brand,
+                "jobcards_status": client_info.jobcards_status
             }
         
 

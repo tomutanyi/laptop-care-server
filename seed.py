@@ -132,9 +132,9 @@ if __name__ == '__main__':
         db.session.commit()
 
 
-        # seed_clients(10)
-        # seed_devices(20)
-        # seed_users(10)
-        seed_jobcards()     
+        seed_clients(10)
+        seed_devices(20)
+        seed_users(10)
+        seed_jobcards()   
 
         print("Database seeded successfully!")
