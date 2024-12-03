@@ -1,10 +1,20 @@
-from flask import request, current_app
+from flask import request, current_app, jsonify, send_file
 from flask_restx import Resource, Namespace, reqparse
 from flask_jwt_extended import create_access_token
 from . import db
 from .models import Client, Device, Users, Jobcards
-from datetime import timedelta
 from .email_service import email_service
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
+from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
+from email.mime.text import MIMEText
+import os
+import io
+from datetime import datetime, timedelta
 
 
 client_ns = Namespace('clients', description='Client related operations')
@@ -397,19 +407,214 @@ class JobcardStatusUpdateResource(Resource):
 @jobcards_ns.route('/<int:jobcard_id>/update', endpoint='update_jobcard_details')
 class JobcardUpdateResource(Resource):
     def patch(self, jobcard_id):
-        """Update the cost and/or diagnostic of a jobcard."""
-        parser = jobcard_update_parser
-        args = parser.parse_args()
-
-        # Find the jobcard by ID
+        """Update the status, cost and/or diagnostic of a jobcard."""
         jobcard = Jobcards.query.get_or_404(jobcard_id)
-
-        # Update only the fields that were provided
-        if args.get('cost') is not None:
-            jobcard.cost = args['cost']
-        if args.get('diagnostic') is not None:
-            jobcard.diagnostic = args['diagnostic']
+        data = request.get_json()
+        
+        # Track what fields were updated
+        updated_fields = []
+        
+        if 'status' in data:
+            valid_statuses = ['pending', 'in_progress', 'completed', 'cancelled']
+            if data['status'] not in valid_statuses:
+                return {'error': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'}, 400
+            jobcard.status = data['status']
+            updated_fields.append('status')
             
-        db.session.commit()
+        if 'cost' in data:
+            if not isinstance(data['cost'], (int, float)) or data['cost'] < 0:
+                return {'error': 'Cost must be a non-negative number'}, 400
+            jobcard.cost = data['cost']
+            updated_fields.append('cost')
+            
+        if 'diagnostic' in data:
+            if not isinstance(data['diagnostic'], str):
+                return {'error': 'Diagnostic must be a string'}, 400
+            jobcard.diagnostic = data['diagnostic']
+            updated_fields.append('diagnostic')
+            
+        if not updated_fields:
+            return {'error': 'No valid fields to update provided'}, 400
 
-        return {'message': 'Jobcard details updated successfully', 'jobcard': jobcard.to_dict()}, 200
+        try:
+            db.session.commit()
+            return {
+                'message': 'Jobcard updated successfully',
+                'updated_fields': updated_fields,
+                'jobcard': jobcard.to_dict()
+            }, 200
+        except Exception as e:
+            db.session.rollback()
+            return {'error': str(e)}, 500
+
+def generate_invoice_pdf(invoice_data):
+    """
+    Generate a PDF invoice from the provided invoice data
+    
+    :param invoice_data: Dictionary containing invoice details
+    :return: BytesIO object with PDF content
+    """
+    # Create a buffer for the PDF
+    buffer = io.BytesIO()
+    
+    # Create the PDF document
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
+    
+    # Container for the 'Flowable' objects
+    elements = []
+    
+    # Styles
+    styles = getSampleStyleSheet()
+    
+    # Company Header
+    elements.append(Paragraph("Laptop Care Service", styles['Title']))
+    elements.append(Paragraph("Invoice", styles['Heading2']))
+    
+    # Company Details
+    company_details = [
+        ["Laptop Care Service"],
+        ["Nairobi, Kenya"],
+        ["Phone: +254 (0) 700 000 000"],
+        ["Email: support@laptopcare.com"]
+    ]
+    company_details_table = Table(company_details, colWidths=[6*inch])
+    company_details_table.setStyle(TableStyle([
+        ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
+    ]))
+    elements.append(company_details_table)
+    
+    # Client Information
+    client_info = [
+        ["Bill To:", "Invoice Details:"],
+        [invoice_data['client_name'], f"Invoice Number: {invoice_data['jobcard_id']}"],
+        [invoice_data['client_email'], f"Date: {datetime.now().strftime('%Y-%m-%d')}"],
+        [invoice_data['device_info'], ""]
+    ]
+    client_info_table = Table(client_info, colWidths=[3*inch, 3*inch])
+    client_info_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (1,0), colors.grey),
+        ('TEXTCOLOR', (0,0), (1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 12),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 12),
+        ('BACKGROUND', (0,1), (-1,-1), colors.beige),
+    ]))
+    elements.append(client_info_table)
+    
+    # Invoice Items
+    items_data = [['Type', 'Description', 'Quantity', 'Unit Price', 'Total']]
+    total_amount = 0
+    for item in invoice_data['items']:
+        # Default quantity to 1 if not specified
+        quantity = item.get('quantity', 1)
+        unit_price = float(item['price'])
+        item_total = quantity * unit_price
+        total_amount += item_total
+        
+        items_data.append([
+            item['type'].capitalize(), 
+            item['description'], 
+            str(quantity),
+            f"Ksh {unit_price:,.2f}", 
+            f"Ksh {item_total:,.2f}"
+        ])
+    
+    # Add total row
+    items_data.append(['', '', '', 'Total:', f"Ksh {total_amount:,.2f}"])
+    
+    items_table = Table(items_data, colWidths=[1*inch, 3*inch, 1*inch, 1.5*inch, 1.5*inch])
+    items_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.grey),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 12),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 12),
+        ('BACKGROUND', (0,1), (-1,-1), colors.beige),
+        ('GRID', (0,0), (-1,-1), 1, colors.black)
+    ]))
+    elements.append(items_table)
+    
+    # Additional Notes
+    elements.append(Paragraph("Thank you for your business!", styles['Normal']))
+    
+    # Build PDF
+    doc.build(elements)
+    
+    # Move buffer pointer to the beginning
+    buffer.seek(0)
+    return buffer
+
+@jobcards_ns.route('/generate-invoice', endpoint='generate_invoice')
+class InvoiceGenerationResource(Resource):
+    def post(self):
+        data = request.get_json()
+        required_fields = ['jobcard_id', 'client_name', 'client_email', 'device_info', 'items', 'total']
+        
+        # Validate required fields
+        for field in required_fields:
+            if field not in data:
+                return {'error': f'Missing required field: {field}'}, 400
+
+        try:
+            # Generate PDF
+            pdf_buffer = generate_invoice_pdf(data)
+            
+            # Prepare email body with PDF details
+            email_html_body = f'''
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+                    <h2 style="color: #2c3e50;">Invoice for Job Card #{data['jobcard_id']}</h2>
+                    <p>Dear {data['client_name']},</p>
+                    
+                    <p>Please find attached the invoice for your recent laptop repair service.</p>
+                    
+                    <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: white;">
+                        <p><strong>Job Card ID:</strong> {data['jobcard_id']}</p>
+                        <p><strong>Device:</strong> {data['device_info']}</p>
+                        <p><strong>Total Cost:</strong> Ksh {float(data['total']):,.2f}</p>
+                    </div>
+                    
+                    <p>Thank you for choosing Laptop Care Service!</p>
+                </div>
+            </body>
+            </html>
+            '''
+            
+            # Save PDF to a file
+            pdf_filename = f"invoice_{data['jobcard_id']}.pdf"
+            pdf_path = os.path.join(current_app.root_path, 'invoices', pdf_filename)
+            
+            # Ensure invoices directory exists
+            os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
+            
+            with open(pdf_path, 'wb') as f:
+                f.write(pdf_buffer.getvalue())
+            
+            # Send email using email service with PDF attachment
+            email_service.send_email(
+                subject=f"Invoice for Job Card #{data['jobcard_id']}", 
+                recipient=data['client_email'], 
+                html_body=email_html_body,
+                attachments=[{
+                    'filename': pdf_filename,
+                    'content': pdf_buffer.getvalue(),
+                    'subtype': 'pdf'
+                }]
+            )
+            
+            # Return PDF as a response
+            return send_file(
+                pdf_buffer, 
+                mimetype='application/pdf', 
+                as_attachment=True, 
+                download_name=pdf_filename
+            )
+            
+        except Exception as e:
+            current_app.logger.error(f"Invoice generation error: {str(e)}")
+            return {'error': str(e)}, 500

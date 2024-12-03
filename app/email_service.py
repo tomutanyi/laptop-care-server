@@ -2,6 +2,7 @@ import logging
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 from flask import current_app
 from threading import Thread
 from queue import Queue, Empty
@@ -69,29 +70,32 @@ class EmailService:
         """Background worker to process email queue."""
         while not self._stop_thread:
             try:
-                # Wait for 1 second for a new email
-                email_task = self.email_queue.get(timeout=1)
-                
+                # Wait for email with a timeout
                 try:
-                    smtp_conn = self._get_smtp_connection()
-                    if smtp_conn is None:
-                        logger.error("Failed to establish SMTP connection. Skipping email.")
-                        self.email_queue.task_done()
-                        continue
-                    
-                    smtp_conn.send_message(email_task['message'])
-                    smtp_conn.quit()
-                    logger.info(f"Email sent successfully to {email_task['recipient']}")
+                    email_task = self.email_queue.get(timeout=1)
+                except Empty:
+                    continue
+
+                # Get SMTP connection
+                smtp_connection = self._get_smtp_connection()
+                if not smtp_connection:
+                    logger.error("Could not establish SMTP connection")
+                    self.email_queue.task_done()  # Mark task as done if we couldn't process it
+                    continue
+
+                try:
+                    # Send the email
+                    smtp_connection.send_message(email_task['message'])
+                    logger.info(f"Email sent to {email_task['recipient']}")
                 except Exception as send_error:
-                    logger.error(f"Failed to send email to {email_task['recipient']}: {send_error}")
-                    logger.error(traceback.format_exc())
-                
-                self.email_queue.task_done()
-            except Empty:
-                # No emails in queue, continue loop
-                continue
+                    logger.error(f"Failed to send email: {send_error}")
+                finally:
+                    # Close the SMTP connection
+                    smtp_connection.quit()
+                    self.email_queue.task_done()  # Mark task as done after processing
+
             except Exception as e:
-                logger.error(f"Unexpected error in email worker: {e}")
+                logger.error(f"Error in email worker: {e}")
                 logger.error(traceback.format_exc())
 
     def start_email_service(self):
@@ -111,32 +115,50 @@ class EmailService:
             self.email_thread.join()
         logger.info("Email service stopped")
 
-    def send_email(self, subject, recipient, html_body):
+    def send_email(self, subject, recipient, html_body, attachments=None):
         """
-        Queue an email for sending.
+        Queue an email for sending with optional attachments.
         
         Args:
             subject (str): Email subject
             recipient (str): Recipient email address
             html_body (str): HTML content of the email
+            attachments (list, optional): List of dictionaries with file details
+                Each attachment dict should have:
+                - 'filename': name of the file
+                - 'content': file content as bytes
+                - 'mimetype': MIME type of the file (e.g., 'application/pdf')
         
         Returns:
             bool: True if email was queued successfully, False otherwise
         """
         try:
+            # Create multipart message
             message = MIMEMultipart()
             message['From'] = current_app.config.get('MAIL_DEFAULT_SENDER')
             message['To'] = recipient
             message['Subject'] = subject
             
+            # Attach HTML body
             message.attach(MIMEText(html_body, 'html'))
             
+            # Add attachments if provided
+            if attachments:
+                for attachment in attachments:
+                    part = MIMEApplication(attachment['content'], _subtype=attachment.get('subtype', 'octet-stream'))
+                    part.add_header('Content-Disposition', 'attachment', filename=attachment['filename'])
+                    message.attach(part)
+            
+            # Prepare email task
             email_task = {
                 'message': message,
                 'recipient': recipient
             }
             
+            # Queue the email
             self.email_queue.put(email_task)
+            
+            logger.info(f"Email to {recipient} queued successfully")
             return True
         except Exception as e:
             logger.error(f"Failed to queue email: {e}")
