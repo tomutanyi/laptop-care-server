@@ -1,8 +1,10 @@
+from flask import request, current_app
 from flask_restx import Resource, Namespace, reqparse
 from flask_jwt_extended import create_access_token
 from . import db
 from .models import Client, Device, Users, Jobcards
 from datetime import timedelta
+from .email_service import email_service
 
 
 client_ns = Namespace('clients', description='Client related operations')
@@ -49,6 +51,10 @@ jobcards_parser.add_argument('problem_description', type=str, required=True, hel
 jobcards_parser.add_argument('status', type=str, required=True, help='Status of the jobcard')
 jobcards_parser.add_argument('assigned_technician_id', type=int, required=False, help='Technician ID for assignment')
 
+# Parser for updating cost and diagnostic
+jobcard_update_parser = reqparse.RequestParser()
+jobcard_update_parser.add_argument('cost', type=int, required=False, help='Cost of the repair')
+jobcard_update_parser.add_argument('diagnostic', type=str, required=False, help='Diagnostic information')
 
 
 # Client routes
@@ -319,7 +325,45 @@ class JobcardsResource(Resource):
         )
         db.session.add(new_jobcard)
         db.session.commit()
-        return new_jobcard.to_dict(), 201
+
+        # Get client and device details for the email
+        client_info = new_jobcard.get_client_device_info()
+        email_sent = False
+        
+        # Log the client info retrieval
+        if client_info is None:
+            print(f"WARNING: No client info found for jobcard ID {new_jobcard.id}")
+            print(f"Device ID: {new_jobcard.device_id}")
+            
+            # Additional debugging: check the device and client
+            device = Device.query.get(new_jobcard.device_id)
+            if device:
+                print(f"Device found: {device}")
+                print(f"Device client ID: {device.client_id}")
+                
+                client = Client.query.get(device.client_id)
+                if client:
+                    print(f"Client found: {client}")
+                    print(f"Client email: {client.email}")
+        
+        if client_info:
+            try:
+                email_sent = email_service.send_jobcard_notification(
+                    client_name=client_info['client_name'],
+                    client_email=client_info['client_email'],
+                    jobcard_id=new_jobcard.id,
+                    problem_description=new_jobcard.problem_description,
+                    device_model=client_info['device_model'],
+                    device_brand=client_info['device_brand']
+                )
+            except Exception as e:
+                print(f"Error sending email notification: {str(e)}")
+
+        # Return jobcard details along with email sending status
+        response = new_jobcard.to_dict()
+        response['email_sent'] = email_sent
+
+        return response, 201
 
 @jobcards_ns.route('/<int:jobcard_id>/details', endpoint='jobcard_details')
 class JobcardDetailsResource(Resource):
@@ -349,5 +393,23 @@ class JobcardStatusUpdateResource(Resource):
         db.session.commit()
 
         return {'message': 'Jobcard status updated successfully', 'jobcard': jobcard.to_dict()}, 200
-    
 
+@jobcards_ns.route('/<int:jobcard_id>/update', endpoint='update_jobcard_details')
+class JobcardUpdateResource(Resource):
+    def patch(self, jobcard_id):
+        """Update the cost and/or diagnostic of a jobcard."""
+        parser = jobcard_update_parser
+        args = parser.parse_args()
+
+        # Find the jobcard by ID
+        jobcard = Jobcards.query.get_or_404(jobcard_id)
+
+        # Update only the fields that were provided
+        if args.get('cost') is not None:
+            jobcard.cost = args['cost']
+        if args.get('diagnostic') is not None:
+            jobcard.diagnostic = args['diagnostic']
+            
+        db.session.commit()
+
+        return {'message': 'Jobcard details updated successfully', 'jobcard': jobcard.to_dict()}, 200

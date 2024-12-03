@@ -5,6 +5,7 @@ from sqlalchemy import func, DateTime
 from datetime import datetime
 import pytz
 import re
+import logging
 
 utc_now = datetime.now(pytz.utc)
 nairobi_tz = pytz.timezone('Africa/Nairobi')
@@ -132,34 +133,54 @@ class Jobcards(db.Model, SerializerMixin):
     device_id = db.Column(db.Integer, db.ForeignKey('devices.id'), nullable=False)
     diagnostic = db.Column(db.String(50), nullable=True)
     timestamp = db.Column(DateTime, default=lambda: datetime.now(pytz.timezone('Africa/Nairobi')))  # Add the timestamp column
+    cost = db.Column(db.Integer, nullable=True)
     assigned_technician_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     
     def get_client_device_info(self):
         """Retrieve client name, client email, device model, and device brand for this jobcard."""
-    
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"Retrieving client info for jobcard ID: {self.id}")
+        logger.info(f"Device ID for this jobcard: {self.device_id}")
+
         client_info = (
             db.session.query(
                 Client.name.label('client_name'),
                 Client.email.label('client_email'),
+                Client.phone_number.label('client_phone'),
                 Device.device_model.label('device_model'),
-                Device.brand.label('device_brand')
+                Device.brand.label('device_brand'),
+                Jobcards.status.label('jobcards_status'),
+                Jobcards.diagnostic.label('diagnostic'),
+                Jobcards.cost.label('cost'),
+                Jobcards.problem_description.label('problem_description'),
+                Users.username.label('technician_name')
             )
             .select_from(Jobcards) 
             .join(Device, Jobcards.device_id == Device.id)
-            .join(Client, Device.client_id == Client.id) 
+            .join(Client, Device.client_id == Client.id)
+            .outerjoin(Users, Jobcards.assigned_technician_id == Users.id)
             .filter(Jobcards.id == self.id)    
             .first()
         )
 
         if client_info:
+            logger.info(f"Client info retrieved: {client_info}")
             return {
                 "client_name": client_info.client_name,
                 "client_email": client_info.client_email,
+                "client_phone": client_info.client_phone,
                 "device_model": client_info.device_model,
-                "device_brand": client_info.device_brand
+                "device_brand": client_info.device_brand,
+                "jobcards_status": client_info.jobcards_status,
+                "diagnostic": client_info.diagnostic,
+                "cost": client_info.cost,
+                "problem_description": client_info.problem_description,
+                "technician_name": client_info.technician_name,
+                "jobcard_id": self.id
             }
         
-
+        logger.warning(f"No client info found for jobcard ID: {self.id}")
         return None
     
 
@@ -173,8 +194,3 @@ class Jobcards(db.Model, SerializerMixin):
 
     def __repr__(self):
         return f"<Jobcard(id={self.id}, problem='{self.problem_description}', status='{self.status}', timestamp='{self.timestamp}')>"
-
-
-
-
-    
