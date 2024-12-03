@@ -1,13 +1,14 @@
 from flask_restx import Resource, Namespace, reqparse
 from flask_jwt_extended import create_access_token
 from . import db
-from .models import Client, Device, Users
+from .models import Client, Device, Users, Jobcards
 from datetime import timedelta
 
 
 client_ns = Namespace('clients', description='Client related operations')
 device_ns = Namespace('devices', description='Device related operations')
 users_ns = Namespace('users', description='Users related operations')
+jobcards_ns = Namespace('jobcards', description='Jobcards related operations')
 
 
 client_parser = reqparse.RequestParser()
@@ -41,6 +42,13 @@ users_parser.add_argument('role', type=str, required=True, help='Role of the Use
 login_parser = reqparse.RequestParser()
 login_parser.add_argument('username', type=str, required=True, help='Username for login')
 login_parser.add_argument('password', type=str, required=True, help='Password for login')
+
+jobcards_parser = reqparse.RequestParser()
+jobcards_parser.add_argument('device_id', type=int, required=True, help='Device ID associated with the jobcard')
+jobcards_parser.add_argument('problem_description', type=str, required=True, help='Job description for the jobcard')
+jobcards_parser.add_argument('status', type=str, required=True, help='Status of the jobcard')
+jobcards_parser.add_argument('assigned_technician_id', type=int, required=False, help='Technician ID for assignment')
+
 
 
 # Client routes
@@ -88,6 +96,23 @@ class ClientResource(Resource):
         db.session.delete(client)
         db.session.commit()
         return '', 204
+    
+@client_ns.route('/search', endpoint='clients_search')
+class ClientSearchResource(Resource):
+    def get(self):
+        """Search for a client by phone number."""
+        parser = reqparse.RequestParser()
+        parser.add_argument('phone_number', type=str, required=True, help="Phone number to search for")
+        args = parser.parse_args()
+
+        # Query the database for clients with the given phone number
+        client = Client.query.filter_by(phone_number=args['phone_number']).first()
+        
+        if client:
+            return client.to_dict(), 200
+        else:
+            return {'message': 'Client not found'}, 404
+
 
 
 # Device routes
@@ -154,6 +179,21 @@ class DeviceResource(Resource):
         db.session.commit()
         return '', 204
     
+@device_ns.route('/search', endpoint='devices_search')
+class DeviceSearchResource(Resource):
+    def get(self):
+        """Search for a device by serial number."""
+        parser = reqparse.RequestParser()
+        parser.add_argument('device_serial_number', type=str, required=True, help='Device serial number to search for')
+        args = parser.parse_args()
+
+        # Query the database for the device with the given serial number
+        device = Device.query.filter_by(device_serial_number=args['device_serial_number']).first()
+        
+        if device:
+            return device.to_dict(), 200
+        else:
+            return {'message': 'Device not found'}, 404
 
 # Users routes
 @users_ns.route('', endpoint='users')
@@ -197,8 +237,15 @@ class UserResource(Resource):
         db.session.commit()
         return 'Deleted User', 204
     
+@users_ns.route('/technicians', endpoint='technicians') #Endpoint to fetch all technicians
+class TechnicianListResource(Resource):
+    def get(self):
+        """Retrieve a list of users with the role of technician."""
+        technicians = Users.query.filter_by(role='technician').all()
+        return [technician.to_dict(rules=('-password',)) for technician in technicians], 200
+    
 
-@users_ns.route('/login', endpoint='user_login')
+@users_ns.route('/login', endpoint='login')
 class UserLoginResource(Resource):
     def post(self):
         """Authenticate user and return a JWT."""
@@ -213,5 +260,94 @@ class UserLoginResource(Resource):
 
         return {
             'access_token': access_token,
+            'username': user.username,
+            'id': user.id,
+            'role': user.role, 
             'message': 'Login successful'
-        }, 200
+        }, 200    
+
+@jobcards_ns.route('', endpoint='jobcards')
+class JobcardsResource(Resource):
+    def get(self):
+        """Retrieve a list of jobcards with optional status and assigned technician ID filters."""
+        # Parse the optional status and assigned technician ID arguments
+        parser = reqparse.RequestParser()
+        parser.add_argument('status', type=str, help='Status of the jobcard')
+        parser.add_argument('assigned_technician_id', type=int, help='Technician ID assigned to the jobcard')
+        args = parser.parse_args()
+
+        # Build the query with optional filters
+        query = Jobcards.query
+        
+        if args['status']:
+            query = query.filter_by(status=args['status'])
+        
+        if args['assigned_technician_id']:
+            query = query.filter_by(assigned_technician_id=args['assigned_technician_id'])
+
+        # Retrieve filtered job cards
+        jobcards = query.all()
+
+        # Get additional client and device details for each job card
+        jobcards_with_details = []
+        for jobcard in jobcards:
+            jobcard_details = jobcard.to_dict()  # Assuming you have a `to_dict` method on Jobcards
+            client_device_info = jobcard.get_client_device_info()  # Get client and device info
+
+            if client_device_info:
+                jobcard_details.update(client_device_info)  # Add client and device info to the jobcard details
+
+            jobcards_with_details.append(jobcard_details)
+
+        # Serialize and return the filtered job cards with client and device details
+        return jobcards_with_details, 200
+
+
+     
+    def post(self):
+        """Create a new jobcard."""
+        data = jobcards_parser.parse_args()
+
+        print("Data received from front end for posting:", data)
+        print("Assigned technician ID:", data.get('assigned_technician_id'))  # Log assigned_technician_id specifically
+
+        new_jobcard = Jobcards(
+            problem_description=data['problem_description'],
+            status=data['status'],
+            device_id=data['device_id'],
+            assigned_technician_id=data.get('assigned_technician_id'),
+        )
+        db.session.add(new_jobcard)
+        db.session.commit()
+        return new_jobcard.to_dict(), 201
+
+@jobcards_ns.route('/<int:jobcard_id>/details', endpoint='jobcard_details')
+class JobcardDetailsResource(Resource):
+    def get(self, jobcard_id):
+        """Retrieve client and device details for a specific jobcard."""
+        jobcard = Jobcards.query.get_or_404(jobcard_id)
+        details = jobcard.get_client_device_info()
+        
+        if details:
+            return details, 200
+        else:
+            return {"message": "Details not found for the specified jobcard."}, 404
+        
+@jobcards_ns.route('/<int:jobcard_id>/status', endpoint='update_jobcard_status')
+class JobcardStatusUpdateResource(Resource):
+    def patch(self, jobcard_id):
+        """Update the status of a jobcard."""
+        parser = reqparse.RequestParser()
+        parser.add_argument('status', type=str, required=True, help='New status for the jobcard')
+        args = parser.parse_args()
+
+        # Find the jobcard by ID
+        jobcard = Jobcards.query.get_or_404(jobcard_id)
+
+        # Update the status field
+        jobcard.status = args['status']
+        db.session.commit()
+
+        return {'message': 'Jobcard status updated successfully', 'jobcard': jobcard.to_dict()}, 200
+    
+

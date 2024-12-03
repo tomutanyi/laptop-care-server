@@ -1,6 +1,6 @@
 from faker import Faker
 from app import app, db 
-from app.models import Client, Device, Users
+from app.models import Client, Device, Users, Jobcards
 
 fake = Faker()
 
@@ -93,18 +93,48 @@ def seed_users(n=10):
         db.session.add(user)
     db.session.commit()
 
+def seed_jobcards():
+    # Ensure there are devices to reference; if not, you'll need to create devices first.
+    device1 = Device.query.first()  # Assuming there is at least one device in the database.
+    if not device1:
+        print("No devices found. Add devices first before seeding jobcards.")
+        return
+
+    # Create jobcards for the existing device (replace `device1.id` with valid device IDs)
+    jobcard1 = Jobcards(
+        problem_description="Battery not charging",
+        status="Pending",
+        device_id=device1.id
+    )
+    jobcard2 = Jobcards(
+        problem_description="Screen flickering",
+        status="In Progress",
+        device_id=device1.id
+    )
+    jobcard3 = Jobcards(
+        problem_description="Keyboard malfunction",
+        status="Completed",
+        device_id=device1.id
+    )
+
+    db.session.add_all([jobcard1, jobcard2, jobcard3])
+    db.session.commit()
+
+
+
 if __name__ == '__main__':
     with app.app_context():
         # Clear out existing data in tables
         # Device.query.delete()
         # Client.query.delete()
-        Users.query.delete()
+        # Users.query.delete()
 
         db.session.commit()
 
 
         # seed_clients(10)
         # seed_devices(20)
-        seed_users(10)     
+        # seed_users(10)
+        seed_jobcards()     
 
         print("Database seeded successfully!")
